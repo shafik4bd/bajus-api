@@ -1,32 +1,67 @@
-"""
-GET /api/prices
-সোনা ও রুপার সব দাম
-"""
+import re, os, json, httpx
+from bs4 import BeautifulSoup
+from datetime import datetime, timezone, timedelta
+from http.server import BaseHTTPRequestHandler
 
-import json
-import sys
-import os
+BAJUS_URL = "https://www.bajus.org/gold-price"
+BD_TZ = timezone(timedelta(hours=6))
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://www.google.com/",
+    "Cache-Control": "no-cache",
+}
 
-sys.path.insert(0, os.path.dirname(__file__))
-from _scraper import fetch_bajus
+def gram_to_bhori(p):
+    try: return f"{round(float(re.sub(r'[^\\d.]', '', p)) * 11.664):,}"
+    except: return None
 
-
-def handler(request, response):
-    # CORS headers
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Content-Type"] = "application/json; charset=utf-8"
-    response.headers["Cache-Control"] = "public, s-maxage=3600, stale-while-revalidate=7200"
-
-    if request.method == "OPTIONS":
-        response.status_code = 204
-        return response
-
+def fetch_bajus():
+    html, method = None, None
     try:
-        data = fetch_bajus()
-        response.status_code = 200
-        response.body = json.dumps(data, ensure_ascii=False, indent=2)
-    except RuntimeError as e:
-        response.status_code = 502
-        response.body = json.dumps({"error": str(e)}, ensure_ascii=False)
+        with httpx.Client(timeout=12, headers=HEADERS, follow_redirects=True) as c:
+            r = c.get(BAJUS_URL)
+            if r.status_code == 200: html, method = r.text, "direct"
+    except: pass
+    if not html:
+        key = os.environ.get("SCRAPER_API_KEY")
+        if key:
+            try:
+                with httpx.Client(timeout=30) as c:
+                    r = c.get(f"http://api.scraperapi.com?api_key={key}&url={BAJUS_URL}&render=true")
+                    if r.status_code == 200: html, method = r.text, "scraperapi"
+            except: pass
+    if not html: raise RuntimeError("ডেটা আনা সম্ভব হয়নি।")
 
-    return response
+    soup = BeautifulSoup(html, "lxml")
+    silver = []
+    for table in soup.find_all("table"):
+        for row in table.find_all("tr"):
+            cells = [td.get_text(strip=True) for td in row.find_all(["td","th"])]
+            if len(cells) < 2: continue
+            p, d = cells[0], cells[1] if len(cells)>1 else ""
+            raw = cells[2] if len(cells)>2 else ""
+            pc = re.sub(r"[^\d.]", "", raw) or None
+            if p and re.search(r"silver|রুপা|রূপা", p, re.IGNORECASE):
+                silver.append({"product":p,"description":d,"price_per_gram":pc,"price_per_bhori":gram_to_bhori(pc) if pc else None})
+    return {"source":"BAJUS","currency":"BDT","silver":silver,
+            "fetched_at":datetime.now(BD_TZ).strftime("%Y-%m-%d %H:%M:%S"),"_meta":{"method":method}}
+
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        try:
+            data = fetch_bajus()
+            body = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+            self.send_response(200)
+        except Exception as e:
+            body = json.dumps({"error": str(e)}, ensure_ascii=False).encode("utf-8")
+            self.send_response(502)
+        self.send_header("Content-Type","application/json; charset=utf-8")
+        self.send_header("Access-Control-Allow-Origin","*")
+        self.end_headers()
+        self.wfile.write(body)
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin","*")
+        self.end_headers()
