@@ -1,15 +1,19 @@
 {
-  "devCommand": "uvicorn main:app --host 0.0.0.0 --port 3000",
+  "version": 2,
   "builds": [
     {
-      "src": "main.py",
+      "src": "api/**/*.py",
       "use": "@vercel/python"
+    },
+    {
+      "src": "public/**",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
-    {
-      "source": "/(.*)",
-      "destination": "main.py"
-    }
+    { "src": "/api/prices/gold",   "dest": "/api/prices/gold.py"   },
+    { "src": "/api/prices/silver", "dest": "/api/prices/silver.py" },
+    { "src": "/api/prices",        "dest": "/api/prices/index.py"  },
+    { "src": "/(.*)",              "dest": "/public/index.html"    }
   ]
 }
