@@ -12,30 +12,62 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# এই রুটটি নিশ্চিত করবে যে হোম পেজে কিছু দেখাচ্ছে
 @app.get("/")
-def read_root():
-    return {"status": "Success", "message": "Welcome to Gold Price API. Access /prices for data."}
+def home():
+    return {"message": "BAJUS API is Live! Visit /prices"}
 
 @app.get("/prices")
 def get_prices():
     url = "https://www.bajus.org/gold-price"
-    headers = {"User-Agent": "Mozilla/5.0"}
+    # ব্রাউজারের মতো অভিনয় করার জন্য শক্তিশালী হেডার
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9"
+    }
+
     try:
-        response = requests.get(url, headers=headers, timeout=15)
+        response = requests.get(url, headers=headers, timeout=20)
+        # যদি এনকোডিং সমস্যা থাকে তা ফিক্স করা
+        response.encoding = 'utf-8' 
+        
         soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # সব টেবিল খুঁজে বের করা
         tables = soup.find_all('table')
+        
         results = {"gold": {}, "silver": {}}
+
+        # ডাটা ক্লিন করার ফাংশন
+        def clean_text(text):
+            return text.replace('\n', '').replace('\t', '').strip()
+
         if len(tables) >= 1:
-            for row in tables[0].find_all('tr')[1:]:
+            # সোনার ডাটা (প্রথম টেবিল)
+            rows = tables[0].find_all('tr')
+            for row in rows:
                 cols = row.find_all('td')
                 if len(cols) >= 2:
-                    results["gold"][cols[0].text.strip()] = cols[1].text.strip()
+                    key = clean_text(cols[0].text)
+                    val = clean_text(cols[1].text)
+                    if "K" in key or "Traditional" in key:
+                        results["gold"][key] = val
+
         if len(tables) >= 2:
-            for row in tables[1].find_all('tr')[1:]:
+            # রুপার ডাটা (দ্বিতীয় টেবিল)
+            rows = tables[1].find_all('tr')
+            for row in rows:
                 cols = row.find_all('td')
                 if len(cols) >= 2:
-                    results["silver"][cols[0].text.strip()] = cols[1].text.strip()
+                    key = clean_text(cols[0].text)
+                    val = clean_text(cols[1].text)
+                    if "K" in key or "Traditional" in key:
+                        results["silver"][key] = val
+
+        # যদি ডাটা তবুও না পাওয়া যায় (বিকল্প পদ্ধতি)
+        if not results["gold"]:
+             return {"status": "error", "message": "Could not find data on the page. Website structure might have changed."}
+
         return {"status": "success", "data": results}
+
     except Exception as e:
         return {"status": "error", "message": str(e)}
