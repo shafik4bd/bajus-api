@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BAJUS সোনা ও রুপার দাম</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0a0a0a;
+      color: #e8e8e8;
+      min-height: 100vh;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      background: linear-gradient(135deg, #7a5800 0%, #c9a000 40%, #ffd700 60%, #c9a000 80%, #7a5800 100%);
+      padding: 36px 20px 32px;
+      text-align: center;
+    }
+    .hero-icon { font-size: 52px; line-height: 1; }
+    .hero h1   { margin: 10px 0 4px; font-size: 26px; color: #000; font-weight: 800; letter-spacing: -0.5px; }
+    .hero p    { font-size: 13px; color: #333; }
+    .badge {
+      display: inline-block;
+      margin-top: 10px;
+      background: rgba(0,0,0,0.18);
+      color: #000;
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+    }
+
+    /* ── Layout ── */
+    .container { max-width: 760px; margin: 0 auto; padding: 32px 16px 60px; }
+
+    /* ── Section titles ── */
+    .section-title {
+      font-size: 16px;
+      font-weight: 700;
+      border-bottom: 1px solid #222;
+      padding-bottom: 8px;
+      margin: 32px 0 14px;
+    }
+
+    /* ── Price Cards ── */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .card {
+      background: #141414;
+      border: 1px solid #222;
+      border-radius: 10px;
+      padding: 14px 16px;
+      transition: border-color .2s;
+    }
+    .card:hover { border-color: #ffd700; }
+    .card-label  { font-size: 11px; color: #777; margin-bottom: 2px; text-transform: uppercase; letter-spacing: .5px; }
+    .card-desc   { font-size: 11px; color: #555; margin-bottom: 8px; }
+    .card-gram   { font-size: 22px; font-weight: 800; color: #ffd700; }
+    .card-gram.silver { color: #c0c0c0; }
+    .card-bhori  { font-size: 12px; color: #999; margin-top: 2px; }
+    .card-unit   { font-size: 10px; color: #555; margin-left: 3px; font-weight: 400; }
+
+    /* ── Loading / Error ── */
+    .loader {
+      text-align: center;
+      padding: 48px;
+      color: #555;
+    }
+    .spinner {
+      display: inline-block;
+      width: 28px; height: 28px;
+      border: 3px solid #333;
+      border-top-color: #ffd700;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+      margin-bottom: 10px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error-box {
+      background: #1a0000;
+      border: 1px solid #5a0000;
+      border-radius: 8px;
+      padding: 16px;
+      color: #ff8888;
+      font-size: 13px;
+    }
+
+    /* ── Endpoint Rows ── */
+    .endpoint-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      background: #141414;
+      border: 1px solid #222;
+      border-radius: 8px;
+      padding: 11px 14px;
+      margin-bottom: 8px;
+    }
+    .endpoint-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .method-badge  { background: #0d2e0d; color: #4caf50; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
+    .endpoint-path { font-family: monospace; color: #ffd700; font-size: 13px; }
+    .endpoint-desc { color: #666; font-size: 12px; }
+    .copy-btn {
+      background: #1e1e1e;
+      color: #888;
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      padding: 4px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all .2s;
+    }
+    .copy-btn.copied { background: #0d2e0d; color: #4caf50; border-color: #1a4a1a; }
+
+    /* ── Code block ── */
+    .code-block {
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 8px;
+      padding: 16px;
+      font-family: monospace;
+      font-size: 12px;
+      color: #7ec8a4;
+      overflow-x: auto;
+      line-height: 1.7;
+      white-space: pre;
+    }
+
+    /* ── Meta info ── */
+    .meta { font-size: 11px; color: #444; text-align: right; margin-top: 10px; }
+    .tag  { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 4px; padding: 1px 6px; margin-left: 4px; color: #555; }
+
+    /* ── Env guide ── */
+    .guide { background: #111; border: 1px solid #222; border-radius: 8px; padding: 16px; font-size: 13px; line-height: 1.9; }
+    .guide ol { padding-left: 18px; color: #bbb; }
+    .guide a   { color: #4caf50; }
+    code { background: #1e1e1e; color: #ffd700; padding: 1px 5px; border-radius: 3px; font-family: monospace; font-size: 12px; }
+
+    footer { text-align: center; margin-top: 48px; color: #333; font-size: 11px; }
+    footer a { color: #444; }
+  </style>
+</head>
+<body>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-icon">🥇</div>
+    <h1>BAJUS সোনা ও রুপার দাম</h1>
+    <p>বাংলাদেশ জুয়েলার্স সমিতি — রিয়েল-টাইম API</p>
+    <span class="badge" id="effective-badge">লোড হচ্ছে...</span>
+  </div>
+
+  <div class="container">
+
+    <!-- Live Prices -->
+    <div class="section-title">📊 আজকের দাম</div>
+
+    <div id="prices-container">
+      <div class="loader">
+        <div class="spinner"></div>
+        <p>BAJUS থেকে দাম আনা হচ্ছে...</p>
+      </div>
+    </div>
+
+    <!-- API Endpoints -->
+    <div class="section-title">🔗 API Endpoints</div>
+
+    <div id="endpoints"></div>
+
+    <!-- Example Response -->
+    <div class="section-title">📋 Example Response</div>
+    <div class="code-block">{
+  "source": "BAJUS (বাংলাদেশ জুয়েলার্স সমিতি)",
+  "currency": "BDT",
+  "gold": [
+    {
+      "product": "22 KARAT GOLD PER GRAM",
+      "description": "CADMIUM (HALLMARKED GOLD)",
+      "price_per_gram": "10230",
+      "price_per_bhori": "119,322"
+    },
+    ...
+  ],
+  "silver": [
+    {
+      "product": "SILVER PER GRAM",
+      "price_per_gram": "156",
+      "price_per_bhori": "1,820"
+    }
+  ],
+  "effective_from": "10:00 am, 10/03/2026",
+  "fetched_at": "2026-03-10 14:30:00"
+}</div>
+
+    <!-- Cloudflare Bypass Guide -->
+    <div class="section-title">⚙️ Cloudflare Bypass সেটআপ</div>
+    <div class="guide">
+      <p style="color:#ffd700; margin-bottom:8px">যদি সরাসরি কাজ না করে, ScraperAPI যোগ করুন (ফ্রি):</p>
+      <ol>
+        <li><a href="https://scraperapi.com" target="_blank">scraperapi.com</a> → ফ্রি account → API Key কপি করুন (১০০০ req/month ফ্রি)</li>
+        <li>Vercel Dashboard → আপনার project → <strong>Settings → Environment Variables</strong></li>
+        <li>নাম: <code>SCRAPER_API_KEY</code> &nbsp;|&nbsp; মান: আপনার key</li>
+        <li><strong>Redeploy</strong> করুন — ব্যস!</li>
+      </ol>
+      <p style="margin-top:12px; font-size:12px; color:#555">
+        Bypass স্তর: <code>direct</code> → <code>google-cache</code> → <code>scraperapi</code>
+      </p>
+    </div>
+
+    <footer>
+      Data: <a href="https://bajus.org" target="_blank">bajus.org</a> &nbsp;·&nbsp;
+      Cache: ১ ঘণ্টা &nbsp;·&nbsp;
+      Built with Python + Vercel Serverless
+    </footer>
+
+  </div>
+
+  <script>
+    const BASE = window.location.origin;
+
+    const ENDPOINTS = [
+      { path: "/api/prices",        label: "সব দাম",     desc: "gold + silver" },
+      { path: "/api/prices/gold",   label: "শুধু সোনা", desc: "gold only"    },
+      { path: "/api/prices/silver", label: "শুধু রুপা", desc: "silver only"  },
+    ];
+
+    // ── Render Endpoints ──────────────────────────────────────
+    const epContainer = document.getElementById("endpoints");
+    ENDPOINTS.forEach(({ path, label, desc }) => {
+      epContainer.innerHTML += `
+        <div class="endpoint-row">
+          <div class="endpoint-left">
+            <span class="method-badge">GET</span>
+            <span class="endpoint-path">${path}</span>
+            <span class="endpoint-desc">${label} · ${desc}</span>
+          </div>
+          <button class="copy-btn" onclick="copyURL('${path}', this)">Copy URL</button>
+        </div>`;
+    });
+
+    // ── Copy URL ──────────────────────────────────────────────
+    function copyURL(path, btn) {
+      navigator.clipboard.writeText(BASE + path);
+      btn.textContent = "✓ Copied!";
+      btn.classList.add("copied");
+      setTimeout(() => { btn.textContent = "Copy URL"; btn.classList.remove("copied"); }, 2000);
+    }
+
+    // ── Fetch & Render Prices ─────────────────────────────────
+    async function loadPrices() {
+      const container = document.getElementById("prices-container");
+      try {
+        const res  = await fetch("/api/prices");
+        const data = await res.json();
+
+        if (data.error) throw new Error(data.error);
+
+        // effective badge
+        if (data.effective_from) {
+          document.getElementById("effective-badge").textContent =
+            "🕐 কার্যকর: " + data.effective_from;
+        } else {
+          document.getElementById("effective-badge").textContent =
+            "স্ক্র্যাপ: " + data.fetched_at;
+        }
+
+        let html = "";
+
+        // Gold cards
+        if (data.gold?.length) {
+          html += `<p style="font-size:13px; color:#ffd700; margin-bottom:10px; font-weight:600">🥇 সোনার দাম</p>`;
+          html += `<div class="card-grid">`;
+          data.gold.forEach(item => {
+            html += `
+              <div class="card">
+                <div class="card-label">${item.product}</div>
+                <div class="card-desc">${item.description || ""}</div>
+                <div class="card-gram">
+                  ${item.price_per_gram
+                    ? "৳" + Number(item.price_per_gram).toLocaleString()
+                    : "—"}
+                  <span class="card-unit">/গ্রাম</span>
+                </div>
+                <div class="card-bhori">
+                  ${item.price_per_bhori ? "৳" + item.price_per_bhori + " /ভরি" : ""}
+                </div>
+              </div>`;
+          });
+          html += `</div>`;
+        }
+
+        // Silver cards
+        if (data.silver?.length) {
+          html += `<p style="font-size:13px; color:#c0c0c0; margin: 20px 0 10px; font-weight:600">🥈 রুপার দাম</p>`;
+          html += `<div class="card-grid">`;
+          data.silver.forEach(item => {
+            html += `
+              <div class="card">
+                <div class="card-label">${item.product}</div>
+                <div class="card-desc">${item.description || ""}</div>
+                <div class="card-gram silver">
+                  ${item.price_per_gram
+                    ? "৳" + Number(item.price_per_gram).toLocaleString()
+                    : "—"}
+                  <span class="card-unit">/গ্রাম</span>
+                </div>
+                <div class="card-bhori">
+                  ${item.price_per_bhori ? "৳" + item.price_per_bhori + " /ভরি" : ""}
+                </div>
+              </div>`;
+          });
+          html += `</div>`;
+        }
+
+        if (!data.gold?.length && !data.silver?.length) {
+          html = `<div class="error-box">দাম পাওয়া যায়নি। SCRAPER_API_KEY সেট করুন।</div>`;
+        }
+
+        html += `<p class="meta">
+          স্ক্র্যাপ: ${data.fetched_at}
+          <span class="tag">${data._meta?.method || "—"}</span>
+        </p>`;
+
+        container.innerHTML = html;
+
+      } catch (err) {
+        document.getElementById("effective-badge").textContent = "⚠️ লোড ব্যর্থ";
+        container.innerHTML = `
+          <div class="error-box">
+            ⚠️ ${err.message}<br><br>
+            <small>Vercel → Settings → Environment Variables → SCRAPER_API_KEY যোগ করুন।</small>
+          </div>`;
+      }
+    }
+
+    loadPrices();
+  </script>
+</body>
+</html>
