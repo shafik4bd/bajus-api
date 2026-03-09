@@ -5,6 +5,8 @@ from http.server import BaseHTTPRequestHandler
 
 BAJUS_URL = "https://www.bajus.org/gold-price"
 BD_TZ = timezone(timedelta(hours=6))
+CACHE_TTL = 3600  # ১ ঘণ্টা
+
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -12,6 +14,9 @@ HEADERS = {
     "Referer": "https://www.google.com/",
     "Cache-Control": "no-cache",
 }
+
+# ── In-memory cache (same Vercel instance এ কাজ করে) ──
+_cache = {"data": None, "expires_at": 0}
 
 def gram_to_bhori(p):
     try: return f"{round(float(re.sub(r'[^\\d.]', '', p)) * 11.664):,}"
@@ -22,13 +27,11 @@ def parse_html(html):
     gold, silver = [], []
     body_text = soup.get_text(separator=" ")
 
-    # effective_from তারিখ
     effective_from = None
     m = re.search(r"effective[\s\S]{0,40}?(\d{1,2}[:.]\d{2}\s*(?:am|pm)[\s,]*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})", body_text, re.IGNORECASE)
     if m:
         effective_from = m.group(1).strip()
 
-    # ── পদ্ধতি ১: table থেকে পার্স ──
     for table in soup.find_all("table"):
         for row in table.find_all("tr"):
             cells = [td.get_text(separator=" ", strip=True) for td in row.find_all(["td", "th"])]
@@ -41,8 +44,7 @@ def parse_html(html):
             price_clean = re.sub(r"[^\d.]", "", raw_price) or None
             if not product: continue
             item = {
-                "product": product,
-                "description": description,
+                "product": product, "description": description,
                 "price_per_gram": price_clean,
                 "price_per_bhori": gram_to_bhori(price_clean) if price_clean else None,
             }
@@ -51,53 +53,24 @@ def parse_html(html):
             else:
                 gold.append(item)
 
-    # ── পদ্ধতি ২: div/td যেকোনো জায়গা থেকে "KARAT" খোঁজা ──
     if not gold:
-        for tag in soup.find_all(["td", "div", "p", "li", "span"]):
-            text = tag.get_text(separator=" ", strip=True)
-            # "22 KARAT GOLD PER GRAM" এর পর দাম থাকে
-            km = re.search(r"(2[124]|18)\s*KARAT", text, re.IGNORECASE)
-            pm = re.search(r"(\d{3,6})\s*(BDT|৳|TK)?", text, re.IGNORECASE)
-            if km and pm:
-                karat = km.group(1)
-                pc = pm.group(1)
-                gold.append({
-                    "product": f"{karat} Karat Gold",
-                    "description": text[:80],
-                    "price_per_gram": pc,
-                    "price_per_bhori": gram_to_bhori(pc),
-                })
-
-    # ── পদ্ধতি ৩: raw text থেকে regex ──
-    if not gold:
-        patterns = [
+        for label, pattern in [
             ("22 Karat Gold (Hallmarked)", r"22\s*karat[^0-9]{0,30}?(\d{4,6})"),
             ("21 Karat Gold (Hallmarked)", r"21\s*karat[^0-9]{0,30}?(\d{4,6})"),
             ("18 Karat Gold (Hallmarked)", r"18\s*karat[^0-9]{0,30}?(\d{4,6})"),
             ("Traditional Gold",           r"traditional[^0-9]{0,30}?(\d{4,6})"),
-            ("22 Karat Gold",              r"6[5-9]\d{2}|[78]\d{3}"),  # দাম সরাসরি range দিয়ে
-        ]
-        for label, pattern in patterns[:4]:
+        ]:
             fm = re.search(pattern, body_text, re.IGNORECASE)
             if fm:
                 pc = fm.group(1)
                 gold.append({"product": label, "description": "regex", "price_per_gram": pc, "price_per_bhori": gram_to_bhori(pc)})
 
-    # ── পদ্ধতি ৪: JSON/script tag থেকে ──
-    if not gold:
-        for script in soup.find_all("script"):
-            st = script.string or ""
-            jm = re.findall(r'"price"\s*:\s*"?(\d{4,6})"?', st, re.IGNORECASE)
-            if jm:
-                gold.append({"product": "Gold (script)", "description": "script tag", "price_per_gram": jm[0], "price_per_bhori": gram_to_bhori(jm[0])})
-                break
-
     return {"gold": gold, "silver": silver, "effective_from": effective_from}
 
-def fetch_bajus():
+def fetch_from_bajus():
+    """BAJUS থেকে fresh data আনে — ঘণ্টায় মাত্র ১বার call হবে"""
     html, method = None, None
 
-    # স্তর ১: ScraperAPI (সবার আগে — সবচেয়ে নির্ভরযোগ্য)
     key = os.environ.get("SCRAPER_API_KEY")
     if key:
         for render in ["true", "false"]:
@@ -110,7 +83,6 @@ def fetch_bajus():
                         break
             except: pass
 
-    # স্তর ২: সরাসরি BAJUS
     if not html:
         try:
             with httpx.Client(timeout=15, headers=HEADERS, follow_redirects=True) as c:
@@ -119,7 +91,6 @@ def fetch_bajus():
                     html, method = r.text, "direct"
         except: pass
 
-    # স্তর ৩: Google Cache
     if not html:
         try:
             cache_url = "https://webcache.googleusercontent.com/search?q=cache:" + BAJUS_URL
@@ -144,10 +115,28 @@ def fetch_bajus():
         "_meta": {"method": method},
     }
 
+def get_cached_data():
+    """Cache থেকে দেয়, মেয়াদ শেষ হলে fresh fetch করে"""
+    import time
+    now = time.time()
+
+    # Cache valid থাকলে সরাসরি দাও — BAJUS call নেই
+    if _cache["data"] and now < _cache["expires_at"]:
+        _cache["data"]["_meta"]["cached"] = True
+        _cache["data"]["_meta"]["cache_expires_in_sec"] = int(_cache["expires_at"] - now)
+        return _cache["data"]
+
+    # Cache miss — BAJUS থেকে আনো
+    data = fetch_from_bajus()
+    data["_meta"]["cached"] = False
+    _cache["data"] = data
+    _cache["expires_at"] = now + CACHE_TTL
+    return data
+
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
-            data = fetch_bajus()
+            data = get_cached_data()
             body = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
             self.send_response(200)
         except Exception as e:
@@ -155,6 +144,7 @@ class handler(BaseHTTPRequestHandler):
             self.send_response(502)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Access-Control-Allow-Origin", "*")
+        # Vercel CDN এ ১ ঘণ্টা cache — লাখ request আসলেও ১টাই BAJUS call
         self.send_header("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=7200")
         self.end_headers()
         self.wfile.write(body)
