@@ -12,7 +12,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+@app.get("/")
+def home():
+    return {"message": "BAJUS Gold API is running. Go to /prices for data."}
+    
 @app.get("/prices")
 def get_prices():
     url = "https://www.bajus.org/gold-price"
